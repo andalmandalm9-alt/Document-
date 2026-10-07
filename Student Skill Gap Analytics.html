@@ -1,0 +1,183 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Student Skill Gap Analytics</title>
+<style>
+:root{--bg:#f4f6f9;--card:#fff;--ink:#1c2733;--muted:#6a7787;--brand:#1f3a5f;--accent:#e0912f;--line:#dde3ea;--ok:#2e8b57;--bad:#c0392b;--soft:#e9eef4;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#10161d;--card:#18212b;--ink:#e6edf4;--muted:#9aa8b8;--brand:#274a78;--line:#2b3846;--soft:#243140}}
+:root[data-theme="dark"]{--bg:#10161d;--card:#18212b;--ink:#e6edf4;--muted:#9aa8b8;--brand:#274a78;--line:#2b3846;--soft:#243140}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;font-family:"Segoe UI",system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+nav{background:var(--brand);color:#fff;display:flex;flex-wrap:wrap;align-items:center;gap:6px 18px;padding:12px 22px}
+nav b{font-size:1.1rem;margin-right:auto}
+nav a{color:#dbe6f3;text-decoration:none;padding:4px 2px;border-bottom:2px solid transparent;cursor:pointer}
+nav a:hover,nav a.on{color:#fff;border-color:var(--accent)}
+main{max-width:1050px;margin:22px auto;padding:0 16px}
+h1{margin:0 0 14px;font-size:1.5rem}
+.card{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:16px;margin-bottom:16px}
+.grid{display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.btn{display:inline-block;background:var(--brand);color:#fff;border:0;border-radius:6px;padding:8px 14px;cursor:pointer;text-decoration:none;font-size:.9rem;font-family:inherit}
+.btn.alt{background:var(--accent)}.btn.red{background:var(--bad)}.btn.ghost{background:var(--soft);color:var(--ink)}
+table{width:100%;border-collapse:collapse;font-size:.92rem}
+th,td{text-align:left;padding:8px;border-bottom:1px solid var(--line)}
+th{color:var(--muted);font-weight:600}
+.table-wrap{overflow-x:auto}
+.f{display:grid;gap:12px;grid-template-columns:repeat(auto-fit,minmax(220px,1fr))}
+label{display:flex;flex-direction:column;gap:4px;font-size:.85rem;color:var(--muted)}
+input,textarea{padding:9px;border:1px solid var(--line);border-radius:6px;font-size:.95rem;background:var(--card);color:var(--ink);font-family:inherit}
+input:focus,.btn:focus-visible{outline:2px solid var(--accent)}
+.flash{padding:10px 14px;border-radius:6px;margin-bottom:12px}
+.flash.error{background:#fde8e6;color:var(--bad)}.flash.success{background:#e4f5ec;color:var(--ok)}
+.bar{background:var(--soft);border-radius:5px;height:12px;overflow:hidden}
+.bar i{display:block;height:100%;background:var(--ok)}.bar i.low{background:var(--bad)}
+.row{display:grid;grid-template-columns:110px 1fr 90px;gap:10px;align-items:center;margin:8px 0}
+.tag{display:inline-block;padding:2px 9px;border-radius:12px;font-size:.78rem;background:var(--soft);margin:2px}
+.tag.ok{background:#e4f5ec;color:var(--ok)}.tag.bad{background:#fde8e6;color:var(--bad)}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px;align-items:center}
+.login{max-width:360px;margin:12vh auto}
+.muted{color:var(--muted);font-size:.85rem}
+canvas{max-width:100%}
+a.lnk{color:var(--accent);cursor:pointer;text-decoration:none}
+@media print{nav,.actions,.noprint{display:none!important}}
+</style>
+</head><body>
+<div id="nav"></div>
+<main id="app"></main>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script>
+const SK={programming:'Programming',python:'Python',sql_score:'SQL',communication:'Communication',aptitude:'Aptitude'};
+const REQ=70,NEED=50,$=s=>document.querySelector(s);
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+let user=null,flash=null;
+try{user=sessionStorage.getItem('sg_user')}catch(e){}
+function seed(){
+ const d=[['Arun Kumar','BCA001','BCA',92,8.4,85,78,72,80,88],['Divya S','BCA002','BCA',88,7.9,75,82,68,74,70],['Karthik R','BCA003','BCA',70,6.2,55,48,42,60,52],['Meena P','BCA004','BCA',95,9.1,92,90,88,85,91],['Naveen M','BCA005','BCA',60,5.1,38,30,35,45,40],['Priya L','BCA006','BCA',81,7.2,66,70,58,72,64]];
+ return d.map((r,i)=>({id:i+1,name:r[0],reg_no:r[1],department:r[2],email:'',mobile:'',attendance:r[3],cgpa:r[4],programming:r[5],python:r[6],sql_score:r[7],communication:r[8],aptitude:r[9]}));
+}
+let students=(()=>{try{const v=localStorage.getItem('sg_students');if(v)return JSON.parse(v)}catch(e){}return seed()})();
+const save=()=>{try{localStorage.setItem('sg_students',JSON.stringify(students))}catch(e){}};
+const band=s=>s>=80?'Excellent':s>=60?'Good':s>=40?'Average':'Needs Improvement';
+function analyze(s){
+ const k=Object.keys(SK),sc=k.map(x=>+s[x]),ov=Math.round(sc.reduce((a,b)=>a+b,0)/k.length*10)/10;
+ return{scores:Object.fromEntries(k.map((x,i)=>[SK[x],sc[i]])),overall:ov,band:band(ov),
+  gaps:Object.fromEntries(k.map((x,i)=>[SK[x],Math.round(Math.max(0,REQ-sc[i])*10)/10])),
+  strong:k.filter((x,i)=>sc[i]>=REQ).map(x=>SK[x]),weak:k.filter((x,i)=>sc[i]<REQ).map(x=>SK[x])};
+}
+const avg=a=>a.length?Math.round(a.reduce((x,y)=>x+y,0)/a.length*10)/10:0;
+function stats(){
+ const labels=[...Object.values(SK),'Attendance','CGPA (x10)'];
+ const av=[...Object.keys(SK).map(k=>avg(students.map(s=>+s[k]))),avg(students.map(s=>+s.attendance)),Math.round(avg(students.map(s=>+s.cgpa))*100)/10];
+ const bands={},rows=students.map(s=>{const a=analyze(s);bands[a.band]=(bands[a.band]||0)+1;return{id:s.id,name:s.name,reg_no:s.reg_no,overall:a.overall}}).sort((a,b)=>b.overall-a.overall);
+ return{labels,av,bands,top:rows.slice(0,5),needs:rows.filter(r=>r.overall<NEED)};
+}
+const go=h=>{location.hash=h};
+function msg(){const m=flash?`<div class="flash ${flash[0]}">${esc(flash[1])}</div>`:'';flash=null;return m}
+function renderNav(r){
+ $('#nav').innerHTML=user?`<nav><b>Skill Gap Analytics</b>
+ <a href="#/dashboard" class="${r=='dashboard'?'on':''}">Dashboard</a>
+ <a href="#/students" class="${r=='students'?'on':''}">Students</a>
+ <a href="#/add" class="${r=='add'?'on':''}">Add student</a>
+ <a href="#/report" class="${r=='report'?'on':''}">Report</a>
+ <a id="out">Log out (${esc(user)})</a></nav>`:'';
+ const o=$('#out');if(o)o.onclick=()=>{user=null;try{sessionStorage.removeItem('sg_user')}catch(e){}flash=['success','Logged out successfully.'];go('#/login')};
+}
+function route(){
+ const [,r='login',id]=location.hash.split('/');
+ if(r!=='login'&&!user){flash=['error','Please log in to continue.'];return go('#/login')}
+ if(r==='login'&&user)return go('#/dashboard');
+ renderNav(r);
+ const fn={login,dashboard,students:list,add:()=>form(),edit:()=>form(+id),student:()=>detail(+id),report}[r]||dashboard;
+ fn();scrollTo(0,0);
+}
+function login(){
+ $('#app').innerHTML=`${msg()}<div class="card login"><h1>Administrator sign-in</h1>
+ <form id="lf" class="f" style="grid-template-columns:1fr"><label>Username<input name="u" required autofocus></label>
+ <label>Password<input name="p" id="pw" type="password" required></label>
+ <label style="flex-direction:row;align-items:center;gap:8px;cursor:pointer"><input type="checkbox" id="showpw"> Show password</label>
+ <button class="btn">Sign in</button></form></div>`;
+ $('#showpw').onchange=e=>{$('#pw').type=e.target.checked?'text':'password'};
+ $('#lf').onsubmit=e=>{e.preventDefault();const f=e.target;
+  if(f.u.value.trim().toLowerCase()==='kumaran@gmail.com'&&f.p.value==='kumaran123'){user='kumaran@gmail.com';try{sessionStorage.setItem('sg_user',user)}catch(x){}go('#/dashboard')}
+  else{flash=['error','Invalid username or password.'];login()}};
+}
+function dashboard(){
+ const st=stats();
+ $('#app').innerHTML=`${msg()}<h1>Performance dashboard</h1>
+ <div class="actions"><span class="muted">${students.length} student(s) with recorded skills</span>
+ <a class="btn alt" href="#/report">Report / Export</a></div>
+ <div class="grid"><div class="card"><b>Average score by skill</b><canvas id="bar"></canvas></div>
+ <div class="card"><b>Performance band distribution</b><canvas id="pie"></canvas></div></div>
+ <div class="grid"><div class="card"><b>Top performers</b>${st.top.map((r,i)=>`<p><a class="lnk" href="#/student/${r.id}">${i+1}. ${esc(r.name)}</a> (${esc(r.reg_no)}) - ${r.overall}</p>`).join('')||'<p class="muted">No students yet. Add a student to see results.</p>'}</div>
+ <div class="card"><b>Needs improvement</b>${st.needs.map(r=>`<p><a class="lnk" href="#/student/${r.id}">${esc(r.name)}</a> (${esc(r.reg_no)}) - ${r.overall}</p>`).join('')||'<p class="muted">No students are below the improvement threshold.</p>'}</div></div>`;
+ if(typeof Chart==='undefined'){document.querySelectorAll('canvas').forEach(c=>c.replaceWith(Object.assign(document.createElement('p'),{className:'muted',textContent:'Charts need internet (Chart.js).'})));return}
+ const tc=getComputedStyle(document.body).color;Chart.defaults.color=tc;
+ new Chart($('#bar'),{type:'bar',data:{labels:st.labels,datasets:[{label:'Average score',data:st.av,backgroundColor:'#e0912f'}]},options:{scales:{y:{beginAtZero:true,max:100}},plugins:{legend:{display:false}}}});
+ new Chart($('#pie'),{type:'pie',data:{labels:Object.keys(st.bands),datasets:[{data:Object.values(st.bands),backgroundColor:['#2e8b57','#1f3a5f','#e0912f','#c0392b','#8e44ad']}]}});
+}
+let q='';
+function list(){
+ const rows=students.filter(s=>!q||(s.name+' '+s.reg_no).toLowerCase().includes(q.toLowerCase())).sort((a,b)=>a.name.localeCompare(b.name));
+ $('#app').innerHTML=`${msg()}<h1>Students</h1>
+ <form id="sf" class="actions"><input name="q" value="${esc(q)}" placeholder="Search name or register no"><button class="btn ghost">Search</button><a class="btn" href="#/add">Add student</a></form>
+ <div class="card table-wrap"><table><tr><th>Reg No</th><th>Name</th><th>Department</th><th>Overall</th><th>Band</th><th></th></tr>
+ ${rows.map(s=>{const a=analyze(s);return`<tr><td>${esc(s.reg_no)}</td><td>${esc(s.name)}</td><td>${esc(s.department)}</td><td>${a.overall}</td><td>${a.band}</td>
+ <td><a class="btn ghost" href="#/student/${s.id}">View</a> <a class="btn ghost" href="#/edit/${s.id}">Edit</a></td></tr>`}).join('')||'<tr><td colspan="6" class="muted">No students found. Use "Add student" to create one.</td></tr>'}</table></div>`;
+ $('#sf').onsubmit=e=>{e.preventDefault();q=e.target.q.value.trim();list()};
+}
+function form(id){
+ const s=id?students.find(x=>x.id===id):{department:'BCA'};
+ if(id&&!s){flash=['error','Student not found.'];return go('#/students')}
+ const v=k=>esc(s[k]??'');
+ $('#app').innerHTML=`${msg()}<h1>${id?'Edit':'Add'} student</h1><form id="stf" class="card"><div class="f">
+ <label>Name<input name="name" value="${v('name')}" required></label>
+ <label>Register number<input name="reg_no" value="${v('reg_no')}" required></label>
+ <label>Department<input name="department" value="${v('department')}" required></label>
+ <label>Email<input name="email" type="email" value="${v('email')}"></label>
+ <label>Mobile (10 digits)<input name="mobile" value="${v('mobile')}"></label>
+ <label>Attendance % (0-100)<input name="attendance" type="number" step="0.01" min="0" max="100" value="${s.attendance??0}"></label>
+ <label>CGPA (0-10)<input name="cgpa" type="number" step="0.01" min="0" max="10" value="${s.cgpa??0}"></label>
+ ${Object.entries(SK).map(([k,l])=>`<label>${l} score (0-100)<input name="${k}" type="number" step="0.01" min="0" max="100" value="${s[k]??0}"></label>`).join('')}
+ </div><p><button class="btn">Save student</button> <a class="btn ghost" href="#/students">Cancel</a></p></form>`;
+ $('#stf').onsubmit=e=>{e.preventDefault();const f=e.target,d={},err=[];
+  ['name','reg_no','department','email','mobile'].forEach(k=>d[k]=f[k].value.trim());
+  if(d.mobile&&!/^\d{10}$/.test(d.mobile))err.push('Mobile number must be 10 digits.');
+  if(students.some(x=>x.reg_no.toLowerCase()===d.reg_no.toLowerCase()&&x.id!==id))err.push('This register number already exists.');
+  const lim={attendance:100,cgpa:10,...Object.fromEntries(Object.keys(SK).map(k=>[k,100]))};
+  for(const[k,mx]of Object.entries(lim)){const n=parseFloat(f[k].value||0);if(isNaN(n)||n<0||n>mx)err.push(`${k.replace('_',' ')} must be between 0 and ${mx}.`);else d[k]=n}
+  if(err.length){alert(err.join('\n'));return}
+  if(id){Object.assign(s,d);flash=['success','Student updated.'];save();go('#/student/'+id)}
+  else{d.id=Math.max(0,...students.map(x=>x.id))+1;students.push(d);flash=['success','Student saved.'];save();go('#/students')}};
+}
+function detail(id){
+ const s=students.find(x=>x.id===id);if(!s){flash=['error','Student not found.'];return go('#/students')}
+ const a=analyze(s);
+ $('#app').innerHTML=`${msg()}<h1>${esc(s.name)} <span class="muted">(${esc(s.reg_no)})</span></h1>
+ <div class="actions"><a class="btn" href="#/edit/${s.id}">Edit</a><button class="btn red" id="del">Delete</button></div>
+ <div class="grid"><div class="card"><b>Profile</b><p>Department: ${esc(s.department)}<br>Email: ${esc(s.email)||'-'}<br>Mobile: ${esc(s.mobile)||'-'}<br>Attendance: ${s.attendance}%<br>CGPA: ${s.cgpa}</p>
+ <p><b>Overall skill score: ${a.overall}</b> - ${a.band}</p></div>
+ <div class="card"><b>Strengths and weaknesses</b>
+ <p>Strong: ${a.strong.map(x=>`<span class="tag ok">${x}</span>`).join('')||'<span class="muted">none yet</span>'}</p>
+ <p>Needs work: ${a.weak.map(x=>`<span class="tag bad">${x}</span>`).join('')||'<span class="muted">none, all skills meet the required level</span>'}</p></div></div>
+ <div class="card"><b>Skill gap (required level: ${REQ})</b>${Object.entries(a.scores).map(([n,v])=>`<div class="row"><span>${n}</span><div class="bar"><i class="${v<REQ?'low':''}" style="width:${v}%"></i></div><span>${v}${a.gaps[n]?` <span class="muted">(-${a.gaps[n]})</span>`:''}</span></div>`).join('')}</div>`;
+ $('#del').onclick=()=>{if(confirm('Delete this student?')){students=students.filter(x=>x.id!==id);save();flash=['success','Student deleted.'];go('#/students')}};
+}
+function reportRows(){
+ return students.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(s=>{const a=analyze(s);
+  return{'Reg No':s.reg_no,'Name':s.name,'Department':s.department,'Attendance':s.attendance,'CGPA':s.cgpa,...a.scores,'Overall':a.overall,'Band':a.band,'Weak Skills':a.weak.join(', ')||'-'}});
+}
+function report(){
+ const r=reportRows(),cols=r.length?Object.keys(r[0]):[];
+ $('#app').innerHTML=`${msg()}<h1>Skill gap report</h1>
+ <div class="actions"><button class="btn alt" id="cp">Copy as CSV (paste in Excel)</button><button class="btn" id="pr">Print / Save as PDF</button><span class="muted" id="cm"></span></div>
+ <div class="card table-wrap"><table><tr>${cols.map(c=>`<th>${c}</th>`).join('')}</tr>${r.map(x=>`<tr>${cols.map(c=>`<td>${esc(x[c])}</td>`).join('')}</tr>`).join('')||'<tr><td class="muted">No data.</td></tr>'}</table></div>`;
+ $('#pr').onclick=()=>window.print();
+ $('#cp').onclick=async()=>{
+  const csv=[cols.join(','),...r.map(x=>cols.map(c=>`"${String(x[c]).replace(/"/g,'""')}"`).join(','))].join('\n');
+  try{await navigator.clipboard.writeText(csv);$('#cm').textContent='Copied! Paste into Excel or Notepad (save as .csv).'}
+  catch(e){const t=document.createElement('textarea');t.value=csv;t.rows=8;t.style.width='100%';$('#app').append(t);t.select();$('#cm').textContent='Select all and copy.'}};
+}
+addEventListener('hashchange',route);route();
+</script>
+</body></html>
